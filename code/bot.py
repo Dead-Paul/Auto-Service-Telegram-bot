@@ -90,15 +90,15 @@ def register_user(message, callback_function: Callable[[Message], Any]):
         if message.text is not None:
             if bool(re.compile(r"^[А-ЯІЇЄҐ][а-яіїєґʼ']+(?:-[А-ЯІЇЄҐ][а-яіїєґʼ']+)?(?:\s[А-ЯІЇЄҐ][а-яіїєґʼ']+(?:-[А-ЯІЇЄҐ][а-яіїєґʼ']+)?)+$").fullmatch(message.text)):
                 if register_new_user(message.from_user.id, message.text, phone_number):
-                    bot.reply_to(message, "Реєстрація завершена!")
+                    bot.reply_to(message, "Реєстрація завершена! ✅")
                     callback_function(message)
                 else: 
-                    bot.reply_to(message, "Виникла помилка, спробуйте ще раз!")
+                    bot.reply_to(message, "Виникла помилка, спробуйте ще раз! ❌")
                 return
             else:
-                error_text: str = "Надіслане повідомлення не може бути ПІБ! Будь ласка надішліть ваше корректне ПІБ:"
+                error_text: str = "Надіслане повідомлення не має тексту! 📝 Будь ласка надішліть ваше ПІБ:"
         else:
-            error_text: str = "Надіслане повідомлення не має тексту! Будь ласка надішліть ваше ПІБ:"
+            error_text: str = "Надіслане повідомлення не має тексту! 📝 Будь ласка надішліть ваше ПІБ:"
         bot.register_next_step_handler(
             bot.send_message(message.chat.id, error_text),
             handle_user_full_name, phone_number
@@ -107,19 +107,19 @@ def register_user(message, callback_function: Callable[[Message], Any]):
     def handle_contact(message: Message) -> None:
         if message.content_type == "contact":
             assert isinstance(message.contact, Contact)
-            bot.send_message(message.chat.id, f"Отриман номер телефону: {message.contact.phone_number}!", reply_markup=ReplyKeyboardRemove())
+            bot.send_message(message.chat.id, f"Отриман номер телефону: 📞 {message.contact.phone_number}!", reply_markup=ReplyKeyboardRemove())
             bot.register_next_step_handler(
-                bot.send_message(message.chat.id, f"Для завершення реєстраціх напишіть ваше ПІБ:"),
+                bot.send_message(message.chat.id, f"Для завершення реєстрації напишіть ваше ПІБ 📝:"),
                 handle_user_full_name, message.contact.phone_number
             )
         else:
-            bot.send_message(message.chat.id, f"Це не номер телефону!")
+            bot.send_message(message.chat.id, f"Це не номер телефону! ❌\nБудь ласка надішліть дійсний контакт (натисніть на кнопку)")
             register_user(message, callback_function)
 
     markup = ReplyKeyboardMarkup()
-    markup.add(KeyboardButton("Поділитися номером телефону", request_contact=True))
+    markup.add(KeyboardButton("Поділитися номером телефону 📲", request_contact=True))
     bot.register_next_step_handler(
-        bot.send_message(message.chat.id, "Поділиться вашим номером телефону, для початку реєстрації", reply_markup=markup),
+        bot.send_message(message.chat.id, "Поділитися вашим номером телефону, для початку реєстрації 📲", reply_markup=markup),
         handle_contact
     )
 
@@ -152,10 +152,10 @@ def start_msg(message: Message):
 @bot.callback_query_handler(lambda _: True)
 def callback_query_handler(call: CallbackQuery):
     if call.data is None:
-        bot.answer_callback_query(call.id, "Недійсна кнопка! Помилка (ノへ￣、)",)
+        bot.answer_callback_query(call.id, "Недійсна кнопка! Помилка ❌")
         return
     assert isinstance(call.data, str)
-    bot.answer_callback_query(call.id, "Віддано на обробку! O(∩_∩)O")
+    bot.answer_callback_query(call.id, "Віддано на обробку! ✅")
     call_from, call_to, call_params = call.data.split(' ', 2)
     match call_from:
         case "bot_services":
@@ -165,8 +165,12 @@ def callback_query_handler(call: CallbackQuery):
         case "price_list":
             if "display_service":
                 display_service(call.from_user.id, int(call_params))
+        case "service":
+            if "make_an_appointment":
+                # сделать запись пользователя на выбраный сервис
+                ...
         case _:
-            bot.answer_callback_query(call.id, "Недійсна кнопка! Помилка (ノへ￣、)",)
+            bot.answer_callback_query(call.id, "Віддано на обробку! ✅")
 
 def display_price_list(user_id: int) -> None:
     markup = InlineKeyboardMarkup(row_width=1)
@@ -180,12 +184,14 @@ def display_price_list(user_id: int) -> None:
 def display_service(user_id: int, service_id: int) -> None:
     # заглушка хардкодженным списком, пока нет БД
     service: ServiceDict = test_price_list[service_id - 1]
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Записатись на послугу 📅", callback_data=f"service make_an_appointment {service_id}"))
     bot.send_photo(user_id, service["img_src"], (
         f"🛠️ {service['name']}\n"
         f"💰 Ціна: {service['price']} {service['currency']}\n"
         f"⏱️ Тривалість: {service['duration_min']} хв\n"
         f"📝 Опис: {service['description']}"
-        )
+        ), reply_markup=markup
     )
 
 bot.infinity_polling()
