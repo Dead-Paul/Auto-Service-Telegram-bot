@@ -1,7 +1,8 @@
 import os
+import re
 from telebot import TeleBot
-from telebot.types import Message, User, InlineKeyboardMarkup, InlineKeyboardButton
-from typing import TypedDict
+from telebot.types import Message, User, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, Contact
+from typing import Any, TypedDict, Callable
 from dotenv import load_dotenv
 
 load_dotenv(override = True)
@@ -76,8 +77,61 @@ test_price_list: list[ServiceDict] = [
 ]
 
 
+# функции пустышки для тестов
+def register_new_user(user_id: int, user_fullname: str, phone_number: str) -> bool:
+    return True
+
+def is_registered_user(user_id: int) -> bool:
+    return True
+
+def register_user(message, callback_function: Callable[[Message], Any]):
+    def handle_user_full_name(message: Message, phone_number: str) -> None:
+        assert isinstance(message.from_user, User)
+        if message.text is not None:
+            if bool(re.compile(r"^[А-ЯІЇЄҐ][а-яіїєґʼ']+(?:-[А-ЯІЇЄҐ][а-яіїєґʼ']+)?(?:\s[А-ЯІЇЄҐ][а-яіїєґʼ']+(?:-[А-ЯІЇЄҐ][а-яіїєґʼ']+)?)+$").fullmatch(message.text)):
+                if register_new_user(message.from_user.id, message.text, phone_number):
+                    bot.reply_to(message, "Реєстрація завершена!")
+                    callback_function(message)
+                else: 
+                    bot.reply_to(message, "Виникла помилка, спробуйте ще раз!")
+                return
+            else:
+                error_text: str = "Надіслане повідомлення не може бути ПІБ! Будь ласка надішліть ваше корректне ПІБ:"
+        else:
+            error_text: str = "Надіслане повідомлення не має тексту! Будь ласка надішліть ваше ПІБ:"
+        bot.register_next_step_handler(
+            bot.send_message(message.chat.id, error_text),
+            handle_user_full_name, phone_number
+        )
+
+    def handle_contact(message: Message) -> None:
+        if message.content_type == "contact":
+            assert isinstance(message.contact, Contact)
+            bot.send_message(message.chat.id, f"Отриман номер телефону: {message.contact.phone_number}!", reply_markup=ReplyKeyboardRemove())
+            bot.register_next_step_handler(
+                bot.send_message(message.chat.id, f"Для завершення реєстраціх напишіть ваше ПІБ:"),
+                handle_user_full_name, message.contact.phone_number
+            )
+        else:
+            bot.send_message(message.chat.id, f"Це не номер телефону!")
+            register_user(message, callback_function)
+
+    markup = ReplyKeyboardMarkup()
+    markup.add(KeyboardButton("Поділитися номером телефону", request_contact=True))
+    bot.register_next_step_handler(
+        bot.send_message(message.chat.id, "Поділиться вашим номером телефону, для початку реєстрації", reply_markup=markup),
+        handle_contact
+    )
+
+
 @bot.message_handler(commands=["start"])
 def start_msg(message: Message):
+    # для регистрации нужны: номер телефона, айди (тг), имя
+    assert isinstance(message.from_user, User)
+    if not is_registered_user(message.from_user.id):
+        register_user(message, start_msg)
+        return
+
     markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
         *[
