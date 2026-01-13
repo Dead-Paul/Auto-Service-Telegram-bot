@@ -1,0 +1,11 @@
+# project files
+*.sln
+*.slnx
+*.pyproj
+
+# project folders
+/.vs
+
+# environments
+/env
+.env
