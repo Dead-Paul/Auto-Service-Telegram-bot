@@ -1,7 +1,7 @@
 import os
 import re
 from telebot import TeleBot
-from telebot.types import Message, User, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, Contact
+from telebot.types import Message, User, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, Contact, CallbackQuery
 from typing import Any, TypedDict, Callable
 from dotenv import load_dotenv
 
@@ -135,11 +135,11 @@ def start_msg(message: Message):
     markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
         *[
-            InlineKeyboardButton("🛠️ Послуги / Прайс-лист", callback_data="none"),
-            InlineKeyboardButton("📅 Онлайн-запис", callback_data="none"),
-            InlineKeyboardButton("🕒 Графік роботи", callback_data="none"),
-            InlineKeyboardButton("📍 Контакти та адреса", callback_data="none"),
-            InlineKeyboardButton("📜 Історія записів", callback_data="none"),
+            InlineKeyboardButton("🛠️ Прайс-лист", callback_data=f"bot_services display_price_list None"),
+            InlineKeyboardButton("📅 Мої записи", callback_data=f"bot_services display_future_appointments None"),
+            InlineKeyboardButton("🕒 Графік роботи", callback_data=f"bot_services display_schedule None"),
+            InlineKeyboardButton("📍 Контакти та адреса", callback_data=f"bot_services display_address None"),
+            InlineKeyboardButton("📜 Історія записів", callback_data=f"bot_services display_past_appointments None"),
         ]
     )
 
@@ -148,21 +148,39 @@ def start_msg(message: Message):
                     reply_markup=markup)
     return
 
-@bot.message_handler(commands=["price_list"])
-def price_list_msg(message: Message):
+
+@bot.callback_query_handler(lambda _: True)
+def callback_query_handler(call: CallbackQuery):
+    if call.data is None:
+        bot.answer_callback_query(call.id, "Недійсна кнопка! Помилка (ノへ￣、)",)
+        return
+    assert isinstance(call.data, str)
+    bot.answer_callback_query(call.id, "Віддано на обробку! O(∩_∩)O")
+    call_from, call_to, call_params = call.data.split(' ', 2)
+    match call_from:
+        case "bot_services":
+            match call_to:
+                case "display_price_list":
+                    display_price_list(call.from_user.id)
+        case "price_list":
+            if "display_service":
+                display_service(call.from_user.id, int(call_params))
+        case _:
+            bot.answer_callback_query(call.id, "Недійсна кнопка! Помилка (ノへ￣、)",)
+
+def display_price_list(user_id: int) -> None:
     markup = InlineKeyboardMarkup(row_width=1)
     for service in test_price_list:
-        markup.add(InlineKeyboardButton(f"{service['name']}: {service['price']}{service['currency']}", callback_data="none"))
+        markup.add(InlineKeyboardButton(f"{service['name']}: {service['price']}{service['currency']}", callback_data=f"price_list display_service {service['id']}"))
 
-    bot.send_message(message.chat.id, f"Оберіть потрібну послугу з меню нижче 👇", reply_markup=markup)
+    bot.send_message(user_id, f"Оберіть потрібну послугу з меню нижче 👇", reply_markup=markup)
     return
 
 
-@bot.message_handler(commands=["get_service"])
-def get_service_msg(message: Message):
-    service_index: int = int(str(message.text).split(' ', 1)[1])
-    service: ServiceDict = test_price_list[service_index]
-    bot.send_photo(message.chat.id, service["img_src"], (
+def display_service(user_id: int, service_id: int) -> None:
+    # заглушка хардкодженным списком, пока нет БД
+    service: ServiceDict = test_price_list[service_id - 1]
+    bot.send_photo(user_id, service["img_src"], (
         f"🛠️ {service['name']}\n"
         f"💰 Ціна: {service['price']} {service['currency']}\n"
         f"⏱️ Тривалість: {service['duration_min']} хв\n"
