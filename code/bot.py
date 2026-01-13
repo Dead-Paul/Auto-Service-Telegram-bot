@@ -77,10 +77,11 @@ test_price_list: list[ServiceDict] = [
 ]
 
 
-# функции пустышки для тестов
+# функция-заглушка регистрации нового пользователя
 def register_new_user(user_id: int, user_fullname: str, phone_number: str) -> bool:
     return True
 
+# функция-заглушка проверки зарегистрирован ли пользователь
 def is_registered_user(user_id: int) -> bool:
     return True
 
@@ -162,6 +163,10 @@ def callback_query_handler(call: CallbackQuery):
             match call_to:
                 case "display_price_list":
                     display_price_list(call.from_user.id)
+                case "display_schedule":
+                    display_schedule(call.from_user.id)
+                case "display_address":
+                    display_address(call.from_user.id)
         case "price_list":
             if "display_service":
                 display_service(call.from_user.id, int(call_params))
@@ -182,7 +187,7 @@ def display_price_list(user_id: int) -> None:
 
 
 def display_service(user_id: int, service_id: int) -> None:
-    # заглушка хардкодженным списком, пока нет БД
+    # заглушка, пока нет DB
     service: ServiceDict = test_price_list[service_id - 1]
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("Записатись на послугу 📅", callback_data=f"service make_an_appointment {service_id}"))
@@ -193,5 +198,31 @@ def display_service(user_id: int, service_id: int) -> None:
         f"📝 Опис: {service['description']}"
         ), reply_markup=markup
     )
+
+
+def display_schedule(user_id: int) -> None:
+    # заглушка, пока не файла JSON
+    schedule: str = ("🕒 Графік роботи СТО 🚗\n\n"
+                    "Понеділок – П’ятниця\n"
+                    "⏰ 09:00 – 18:00\n"
+                    "🥪 Перерва: 13:00 – 14:00\n\n"
+                    "Субота\n"
+                    "⏰ 10:00 – 16:00\n"
+                    "🥪 Перерва: 12:30 – 13:00\n\n"
+                    "Неділя\n"
+                    "❌ Вихідний\n"
+                    "⚠️ Тільки запис на майбутні дні\n"
+    )
+    bot.send_message(user_id, schedule)
+
+
+def display_address(user_id: int) -> None:
+    # заглушка, пока не файла JSON
+    schedule: str = ("Контакти та адреса\n\n"
+                     "📍Адреса: м. Харків, вул. Технічна, 12\n"
+                     "📞Телефон для довідок: +380 88 005 55 3535\n"
+                     "📧Електронна пошта: info@sto.kh.ua"
+    )
+    bot.send_message(user_id, schedule)
 
 bot.infinity_polling()
