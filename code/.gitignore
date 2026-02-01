@@ -9,3 +9,6 @@
 # environments
 /env
 .env
+
+# python compiled files
+*.pyc
