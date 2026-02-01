@@ -5,10 +5,16 @@ from telebot.types import Message, User, InlineKeyboardMarkup, InlineKeyboardBut
 from typing import Any, TypedDict, Callable
 from dotenv import load_dotenv
 
+from modules.SQLite3 import SQLite
+from modules.SQL_Queries import SQL_Queries
+
 load_dotenv(override = True)
 
 bot = TeleBot(os.environ["BOT_TOKEN"])
 print(f"Bot @{bot.get_me().username} started!")
+
+sql_db: SQLite = SQLite({"database": "./data.db", "isolation_level": "IMMEDIATE", "autocommit": True}, True)
+queries: SQL_Queries = SQL_Queries(sql_db)
 
 class ServiceDict(TypedDict):
     id: int
@@ -77,20 +83,12 @@ test_price_list: list[ServiceDict] = [
 ]
 
 
-# функция-заглушка регистрации нового пользователя
-def register_new_user(user_id: int, user_fullname: str, phone_number: str) -> bool:
-    return True
-
-# функция-заглушка проверки зарегистрирован ли пользователь
-def is_registered_user(user_id: int) -> bool:
-    return True
-
 def register_user(message, callback_function: Callable[[Message], Any]):
     def handle_user_full_name(message: Message, phone_number: str) -> None:
         assert isinstance(message.from_user, User)
         if message.text is not None:
             if bool(re.compile(r"^[А-ЯІЇЄҐ][а-яіїєґʼ']+(?:-[А-ЯІЇЄҐ][а-яіїєґʼ']+)?(?:\s[А-ЯІЇЄҐ][а-яіїєґʼ']+(?:-[А-ЯІЇЄҐ][а-яіїєґʼ']+)?)+$").fullmatch(message.text)):
-                if register_new_user(message.from_user.id, message.text, phone_number):
+                if queries.register_new_user(message.from_user.id, phone_number, message.text):
                     bot.reply_to(message, "Реєстрація завершена! ✅")
                     callback_function(message)
                 else: 
@@ -129,25 +127,26 @@ def register_user(message, callback_function: Callable[[Message], Any]):
 def start_msg(message: Message):
     # для регистрации нужны: номер телефона, айди (тг), имя
     assert isinstance(message.from_user, User)
-    if not is_registered_user(message.from_user.id):
+    if not queries.is_registered_user(message.from_user.id):
         register_user(message, start_msg)
         return
 
-    markup = InlineKeyboardMarkup(row_width=1)
-    markup.add(
-        *[
-            InlineKeyboardButton("🛠️ Прайс-лист", callback_data=f"bot_services display_price_list None"),
-            InlineKeyboardButton("📅 Мої записи", callback_data=f"bot_services display_future_appointments None"),
-            InlineKeyboardButton("🕒 Графік роботи", callback_data=f"bot_services display_schedule None"),
-            InlineKeyboardButton("📍 Контакти та адреса", callback_data=f"bot_services display_address None"),
-            InlineKeyboardButton("📜 Історія записів", callback_data=f"bot_services display_past_appointments None"),
-        ]
-    )
-
-    assert isinstance(message.from_user, User)
-    bot.send_message(message.chat.id, f"👋 Вітаємо, {message.from_user.first_name}!\nВи у чат-боті станції технічного обслуговування 🚗\nОберіть потрібну дію з меню нижче 👇",
-                    reply_markup=markup)
-    return
+    # проверять на None и если пользователя нет - регать заново
+    if isinstance(user := queries.get_user(message.from_user.id), dict):
+        markup = InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            *[
+                InlineKeyboardButton("🛠️ Прайс-лист", callback_data=f"bot_services display_price_list None"),
+                InlineKeyboardButton("📅 Мої записи", callback_data=f"bot_services display_future_appointments None"),
+                InlineKeyboardButton("🕒 Графік роботи", callback_data=f"bot_services display_schedule None"),
+                InlineKeyboardButton("📍 Контакти та адреса", callback_data=f"bot_services display_address None"),
+                InlineKeyboardButton("📜 Історія записів", callback_data=f"bot_services display_past_appointments None"),
+            ]
+        )
+        bot.send_message(message.chat.id, f"👋 Вітаємо, {user['fullname']} у чат-боті станції технічного обслуговування 🚗\nОберіть потрібну дію з меню нижче 👇",
+                        reply_markup=markup)
+        return
+    register_user(message, start_msg)
 
 
 @bot.callback_query_handler(lambda _: True)
