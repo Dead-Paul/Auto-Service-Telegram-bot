@@ -5,6 +5,7 @@
 
 # project folders
 /.vs
+/.idea
 
 # environments
 /env
