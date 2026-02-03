@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from sqlite3 import Connection, Cursor
 from typing import Literal, TypedDict
@@ -33,3 +34,14 @@ class SQLite:
             self.__cursor = self.__connection.cursor()
         return self.__cursor
 
+class JSON:
+    def __init__(self, path: str):
+        self.path: str = path
+
+    def read(self) -> dict:
+        with open(self.path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def write(self, data: dict) -> None:
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
