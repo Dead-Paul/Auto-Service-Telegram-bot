@@ -52,3 +52,23 @@ class SQL_Queries:
     def cancel_appointment(self, appointment_id: int) -> bool:
         self.sqlite_db.cursor().execute("""UPDATE appointment SET status = -1 WHERE id = ? AND status = 0""", [appointment_id])
         return True
+
+    def add_service(self, name: str, img_src: str, price: float, currency: str, duration_min: float, description: str) -> bool:
+        try:
+            self.sqlite_db.cursor().execute("""INSERT INTO "service" (name, img_src, price, currency, duration_min, description) VALUES (?, ?, ?, ?, ?, ?)""",
+                                            [name, img_src, price, currency, duration_min, description]
+            )
+            return True
+        except sqlite3.Error:
+            return False
+
+    def get_service(self, service_id: int) -> dict | None:
+        try:
+            row = self.sqlite_db.cursor().execute("""SELECT * FROM "service" WHERE id = ?""", [service_id]).fetchone()
+            return dict(row) if row else None
+        except sqlite3.Error:
+            return None
+
+    def get_all_services(self) -> list[dict]:
+        rows = self.sqlite_db.cursor().execute("""SELECT * FROM service ORDER BY id""").fetchall()
+        return [dict(row) for row in rows]

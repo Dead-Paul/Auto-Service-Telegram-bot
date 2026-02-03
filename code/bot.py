@@ -21,72 +21,6 @@ data_db: SQLite = SQLite({"database": "data.db", "isolation_level": "IMMEDIATE",
 data_json = JSON("data.json")
 queries: SQL_Queries = SQL_Queries(data_db)
 
-class ServiceDict(TypedDict):
-    id: int
-    name: str
-    img_src: str
-    price: float
-    currency: str
-    duration_min: float
-    description: str
-
-test_price_list: list[ServiceDict] = [
-    {
-        "id": 1,
-        "name": "Заміна моторної оливи",
-        "price": 800,
-        "currency": "UAH",
-        "duration_min": 30,
-        "description": "Заміна моторної оливи та масляного фільтра з перевіркою рівнів рідин.",
-        "img_src": "https://di-uploads-pod36.dealerinspire.com/cutterbuickgmc/uploads/2023/03/AdobeStock_334203483.jpg"
-    },
-    {
-        "id": 2,
-        "name": "Комп’ютерна діагностика авто",
-        "price": 600,
-        "currency": "UAH",
-        "duration_min": 40,
-        "description": "Зчитування та аналіз помилок електронних систем автомобіля.",
-        "img_src": "https://www.r2cthemes.com/eocte/i/bg/services-diagnostic-service.jpg"
-    },
-    {
-        "id": 3,
-        "name": "Заміна гальмівних колодок",
-        "price": 1200,
-        "currency": "UAH",
-        "duration_min": 60,
-        "description": "Демонтаж старих та встановлення нових гальмівних колодок.",
-        "img_src": "https://st.depositphotos.com/1637787/2927/i/450/depositphotos_29272913-stock-photo-brake-repair.jpg"
-    },
-    {
-        "id": 4,
-        "name": "Розвал-сходження",
-        "price": 1500,
-        "currency": "UAH",
-        "duration_min": 50,
-        "description": "Налаштування кутів коліс для стабільної та безпечної їзди.",
-        "img_src": "https://www.r2cthemes.com/eocte/i/pages/services/service-cardiagnostic.webp"
-    },
-    {
-        "id": 5,
-        "name": "Діагностика акумулятора",
-        "price": 400,
-        "currency": "UAH",
-        "duration_min": 20,
-        "description": "Перевірка стану акумулятора, напруги та пускового струму.",
-        "img_src": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQO5kCepNdhZvDKJtmPAIWnloSdTal7N1CQaA&s"
-    },
-    {
-        "id": 6,
-        "name": "Комплексна мийка автомобіля",
-        "price": 700,
-        "currency": "UAH",
-        "duration_min": 45,
-        "description": "Зовнішня мийка, чистка салону та килимків.",
-        "img_src": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQO5kCepNdhZvDKJtmPAIWnloSdTal7N1CQaA&s"
-    }
-]
-
 
 def register_user(message, callback_function: Callable[[Message], Any]):
     def handle_user_full_name(message: Message, phone_number: str) -> None:
@@ -130,13 +64,11 @@ def register_user(message, callback_function: Callable[[Message], Any]):
 
 @bot.message_handler(commands=["start"])
 def start_msg(message: Message):
-    # для регистрации нужны: номер телефона, айди (тг), имя
     assert isinstance(message.from_user, User)
     if not queries.is_registered_user(message.from_user.id):
         register_user(message, start_msg)
         return
 
-    # проверять на None и если пользователя нет - регать заново
     if isinstance(user := queries.get_user(message.from_user.id), dict):
         markup = InlineKeyboardMarkup(row_width=1)
         markup.add(
@@ -241,27 +173,32 @@ def callback_query_handler(call: CallbackQuery):
             bot.answer_callback_query(call.id, "Віддано на обробку! ✅")
 
 def display_price_list(user_id: int) -> None:
+    services = queries.get_all_services()
+    if not services:
+        bot.send_message(user_id, "❌ Список послуг порожній.")
+        return
     markup = InlineKeyboardMarkup(row_width=1)
-    for service in test_price_list:
+    for service in services:
         markup.add(InlineKeyboardButton(f"{service['name']}: {service['price']}{service['currency']}", callback_data=f"price_list display_service {service['id']}"))
-
-    bot.send_message(user_id, f"Оберіть потрібну послугу з меню нижче 👇", reply_markup=markup)
-    return
+    bot.send_message(user_id, "Оберіть потрібну послугу з меню нижче 👇", reply_markup=markup)
 
 
 def display_service(user_id: int, service_id: int) -> None:
-    # заглушка, пока нет DB
-    service: ServiceDict = test_price_list[service_id - 1]
+    service = queries.get_service(service_id)
+    if not service:
+        bot.send_message(user_id, "❌ Послуга не знайдена.")
+        return
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("Записатись на послугу 📅", callback_data=f"service make_an_appointment {service_id}"))
-    bot.send_photo(user_id, service["img_src"], (
-        f"🛠️ {service['name']}\n"
-        f"💰 Ціна: {service['price']} {service['currency']}\n"
-        f"⏱️ Тривалість: {service['duration_min']} хв\n"
-        f"📝 Опис: {service['description']}"
-        ), reply_markup=markup
+    bot.send_photo(user_id, service["img_src"],
+        (
+            f"🛠️ {service['name']}\n"
+            f"💰 Ціна: {service['price']} {service['currency']}\n"
+            f"⏱️ Тривалість: {service['duration_min']} хв\n"
+            f"📝 Опис: {service['description']}"
+        ),
+        reply_markup=markup
     )
-
 
 def display_schedule(user_id: int) -> None:
     config = JSON("data.json")
