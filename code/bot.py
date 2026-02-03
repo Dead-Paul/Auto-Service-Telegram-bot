@@ -1,11 +1,14 @@
 import os
 import re
+from datetime import datetime
+from typing import Any, TypedDict, Callable
+
+
 from telebot import TeleBot
 from telebot.types import Message, User, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, Contact, CallbackQuery
-from typing import Any, TypedDict, Callable
 from dotenv import load_dotenv
 
-from modules.SQLite3 import SQLite
+from modules.Utils import SQLite
 from modules.SQL_Queries import SQL_Queries
 
 load_dotenv(override = True)
@@ -149,6 +152,37 @@ def start_msg(message: Message):
     register_user(message, start_msg)
 
 
+
+def handle_appointment_datetime(message: Message, service_id: int) -> None:
+    assert message.from_user
+
+    if not message.text:
+        bot.reply_to(message, "❌ Невірний формат. Спробуйте ще раз.")
+        return
+
+    try:
+        appointment_dt = datetime.strptime(message.text, "%Y-%m-%d %H:%M")
+    except ValueError:
+        bot.reply_to(message,"❌ Формат неправильний.\nВикористовуйте: YYYY-MM-DD HH:MM")
+        return
+
+    appointment_ts = appointment_dt.strftime("%Y-%m-%d %H:%M")
+
+    if queries.is_timeslot_taken(appointment_ts):
+        bot.reply_to(message, "⛔ Цей час вже зайнятий. Оберіть інший.")
+        return
+
+    if queries.create_appointment(user_id=message.from_user.id, service_id=service_id, appointment_ts=appointment_ts):
+        bot.reply_to(message, "✅ Запис успішно створено!\n🛠 Послуга ID: {service_id}\n🕒 Час: {appointment_ts}")
+    else:
+        bot.reply_to(message, "❌ Помилка створення запису.")
+
+def make_an_appointment(user_id: int, service_id: int) -> None:
+    bot.send_message(user_id, "📅 Введіть дату та час запису у форматі:\nYYYY-MM-DD HH:MM\n\nНаприклад: 2026-02-10 14:30")
+    bot.register_next_step_handler_by_chat_id(user_id, handle_appointment_datetime, service_id)
+
+
+
 @bot.callback_query_handler(lambda _: True)
 def callback_query_handler(call: CallbackQuery):
     if call.data is None:
@@ -171,8 +205,7 @@ def callback_query_handler(call: CallbackQuery):
                 display_service(call.from_user.id, int(call_params))
         case "service":
             if "make_an_appointment":
-                # сделать запись пользователя на выбраный сервис
-                ...
+                make_an_appointment(call.from_user.id, int(call_params))
         case _:
             bot.answer_callback_query(call.id, "Віддано на обробку! ✅")
 
