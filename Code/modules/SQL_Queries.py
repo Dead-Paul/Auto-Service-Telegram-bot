@@ -12,7 +12,7 @@ class SQL_Queries:
 
     def register_new_user(self, user_id: int, phone_number: str, user_fullname: str) -> bool:
         try:
-            self.sqlite_db.cursor().execute("""INSERT INTO "user" (id, phone, fullname) VALUES (?, ?, ?)""", [user_id, phone_number, user_fullname])
+            self.sqlite_db.cursor().execute("""INSERT INTO "user" (id, phone_number, fullname) VALUES (?, ?, ?)""", [user_id, phone_number, user_fullname])
             return True
         except sqlite3.IntegrityError:
             return False
