@@ -163,6 +163,10 @@ def callback_query_handler(call: CallbackQuery):
                     display_schedule(call.from_user.id)
                 case "display_address":
                     display_address(call.from_user.id)
+                case "display_future_appointments":
+                    display_future_appointments(call.from_user.id)
+                case "display_past_appointments":
+                    display_past_appointments(call.from_user.id)
         case "price_list":
             if "display_service":
                 display_service(call.from_user.id, int(call_params))
@@ -171,6 +175,43 @@ def callback_query_handler(call: CallbackQuery):
                 make_an_appointment(call.from_user.id, int(call_params))
         case _:
             bot.answer_callback_query(call.id, "Віддано на обробку! ✅")
+
+def display_future_appointments(user_id: int) -> None:
+    appointments = queries.get_future_appointments(user_id)
+    if not appointments:
+        bot.send_message(user_id, "📅 У вас немає майбутніх записів.")
+        return
+    text = "📅 Ваші майбутні записи:\n\n"
+    for appointment in appointments:
+        text += (
+            f"🛠️ Послуга: {appointment['name']}\n"
+            f"🕒 Дата та час: {appointment['appointment_ts']}\n"
+            f"⏱️ Тривалість: {appointment['duration_min']} хв\n"
+            f"💰 Ціна: {appointment['price']}{appointment['currency']}\n"
+            "-----------------------\n"
+        )
+    bot.send_message(user_id, text)
+
+
+def display_past_appointments(user_id: int) -> None:
+    appointments = queries.get_past_appointments(user_id)
+
+    if not appointments:
+        bot.send_message(user_id, "📜 У вас немає минулих записів.")
+        return
+    text = "📜 Історія ваших записів:\n\n"
+    for a in appointments:
+        status_text = "✅ Виконано" if a["status"] == 1 else "❌ Скасовано"
+        text += (
+            f"🛠️ Послуга: {a['name']}\n"
+            f"🕒 Дата та час: {a['appointment_ts']}\n"
+            f"⏱️ Тривалість: {a['duration_min']} хв\n"
+            f"💰 Ціна: {a['price']}{a['currency']}\n"
+            f"📌 Статус: {status_text}\n"
+            "-----------------------\n"
+        )
+    bot.send_message(user_id, text)
+
 
 def display_price_list(user_id: int) -> None:
     services = queries.get_all_services()

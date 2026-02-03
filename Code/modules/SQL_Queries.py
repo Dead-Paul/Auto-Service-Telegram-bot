@@ -1,5 +1,6 @@
 import sqlite3
 from typing import Any
+from datetime import datetime
 
 from .Utils import SQLite
 
@@ -33,21 +34,9 @@ class SQL_Queries:
         except sqlite3.Error:
             return False
 
-
     def is_timeslot_taken(self, appointment_ts: str) -> bool:
         appointment: Any|None = self.sqlite_db.cursor().execute("""SELECT 1 FROM "appointment" WHERE appointment_ts = ? AND status = 0""", [appointment_ts]).fetchone()
         return True if appointment is not None else False
-
-
-    def get_future_appointments(self, user_id: int) -> list[dict]:
-        rows = self.sqlite_db.cursor().execute("""SELECT * FROM "appointment" WHERE user_id = ? AND status = 0 AND appointment_ts >= datetime('now') ORDER BY appointment_ts""", [user_id]).fetchall()
-        return [dict(row) for row in rows]
-
-
-    def get_past_appointments(self, user_id: int) -> list[dict]:
-        rows = self.sqlite_db.cursor().execute("""SELECT * FROM "appointment" WHERE user_id = ? AND status != 0 ORDER BY appointment_ts DESC""", [user_id]).fetchall()
-        return [dict(row) for row in rows]
-
 
     def cancel_appointment(self, appointment_id: int) -> bool:
         self.sqlite_db.cursor().execute("""UPDATE appointment SET status = -1 WHERE id = ? AND status = 0""", [appointment_id])
@@ -71,4 +60,31 @@ class SQL_Queries:
 
     def get_all_services(self) -> list[dict]:
         rows = self.sqlite_db.cursor().execute("""SELECT * FROM service ORDER BY id""").fetchall()
+        return [dict(row) for row in rows]
+
+    def get_future_appointments(self, user_id: int) -> list[dict]:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        rows = self.sqlite_db.cursor().execute(
+            """
+            SELECT a.id, a.appointment_ts, a.status, s.name, s.duration_min, s.price, s.currency
+            FROM "appointment" a
+            JOIN "service" s ON a.service_id = s.id
+            WHERE a.user_id = ? AND a.status = 0 AND a.appointment_ts > ?
+            ORDER BY a.appointment_ts
+            """,
+            [user_id, now]
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_past_appointments(self, user_id: int) -> list[dict]:
+        rows = self.sqlite_db.cursor().execute(
+            """
+            SELECT a.id, a.appointment_ts, a.status, s.name, s.duration_min, s.price, s.currency
+            FROM appointment a
+            JOIN service s ON a.service_id = s.id
+            WHERE a.user_id = ? AND a.status IN (-1, 1)
+            ORDER BY a.appointment_ts DESC
+            """,
+            [user_id]
+        ).fetchall()
         return [dict(row) for row in rows]
