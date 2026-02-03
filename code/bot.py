@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any, TypedDict, Callable
 
 
@@ -8,7 +8,7 @@ from telebot import TeleBot
 from telebot.types import Message, User, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, Contact, CallbackQuery
 from dotenv import load_dotenv
 
-from modules.Utils import SQLite
+from modules.Utils import SQLite, JSON
 from modules.SQL_Queries import SQL_Queries
 
 load_dotenv(override = True)
@@ -16,8 +16,10 @@ load_dotenv(override = True)
 bot = TeleBot(os.environ["BOT_TOKEN"])
 print(f"Bot @{bot.get_me().username} started!")
 
-sql_db: SQLite = SQLite({"database": "./data.db", "isolation_level": "IMMEDIATE", "autocommit": True}, True)
-queries: SQL_Queries = SQL_Queries(sql_db)
+os.chdir("./data")
+data_db: SQLite = SQLite({"database": "data.db", "isolation_level": "IMMEDIATE", "autocommit": True}, True)
+data_json = JSON("data.json")
+queries: SQL_Queries = SQL_Queries(data_db)
 
 class ServiceDict(TypedDict):
     id: int
@@ -152,28 +154,57 @@ def start_msg(message: Message):
     register_user(message, start_msg)
 
 
+def is_within_working_hours(date_time: datetime, working_hours: list) -> bool:
+    day_config = working_hours[date_time.weekday()]
+    if day_config is None:
+        return False
+
+    def parse(time_to_parse: str) -> time:
+        hour, minute = map(int, time_to_parse.split(":"))
+        return time(hour, minute)
+
+    start = parse(day_config["start"])
+    end = parse(day_config["end"])
+    if not (start <= date_time.time() < end):
+        return False
+    if "break" in day_config and day_config["break"]:
+        break_start = parse(day_config["break"][0])
+        break_end = parse(day_config["break"][1])
+        if break_start <= date_time.time() < break_end:
+            return False
+    return True
+
+
+
 
 def handle_appointment_datetime(message: Message, service_id: int) -> None:
-    assert message.from_user
+    assert isinstance(message.from_user, User)
 
     if not message.text:
         bot.reply_to(message, "❌ Невірний формат. Спробуйте ще раз.")
         return
 
     try:
-        appointment_dt = datetime.strptime(message.text, "%Y-%m-%d %H:%M")
+        appointment_datetime = datetime.strptime(message.text, "%Y-%m-%d %H:%M")
     except ValueError:
         bot.reply_to(message,"❌ Формат неправильний.\nВикористовуйте: YYYY-MM-DD HH:MM")
         return
 
-    appointment_ts = appointment_dt.strftime("%Y-%m-%d %H:%M")
-
-    if queries.is_timeslot_taken(appointment_ts):
-        bot.reply_to(message, "⛔ Цей час вже зайнятий. Оберіть інший.")
+    working_hours = data_json.read()["working_hours"]
+    if not is_within_working_hours(appointment_datetime, working_hours):
+        bot.reply_to(message, "⛔ Обраний час поза робочим графіком або під час перерви. Оберіть інший.")
+        bot.register_next_step_handler(message, handle_appointment_datetime, service_id)
         return
 
-    if queries.create_appointment(user_id=message.from_user.id, service_id=service_id, appointment_ts=appointment_ts):
-        bot.reply_to(message, "✅ Запис успішно створено!\n🛠 Послуга ID: {service_id}\n🕒 Час: {appointment_ts}")
+    appointment_timestamp = appointment_datetime.strftime("%Y-%m-%d %H:%M")
+
+    if queries.is_timeslot_taken(appointment_timestamp):
+        bot.reply_to(message, "⛔ Цей час вже зайнятий. Оберіть інший.")
+        bot.register_next_step_handler(message, handle_appointment_datetime, service_id)
+        return
+
+    if queries.create_appointment(user_id=message.from_user.id, service_id=service_id, appointment_ts=appointment_timestamp):
+        bot.reply_to(message, f"✅ Запис успішно створено!\n🛠 Послуга ID: {service_id}\n🕒 Час: {appointment_timestamp}")
     else:
         bot.reply_to(message, "❌ Помилка створення запису.")
 
@@ -233,19 +264,22 @@ def display_service(user_id: int, service_id: int) -> None:
 
 
 def display_schedule(user_id: int) -> None:
-    # заглушка, пока не файла JSON
-    schedule: str = ("🕒 Графік роботи СТО 🚗\n\n"
-                    "Понеділок – П’ятниця\n"
-                    "⏰ 09:00 – 18:00\n"
-                    "🥪 Перерва: 13:00 – 14:00\n\n"
-                    "Субота\n"
-                    "⏰ 10:00 – 16:00\n"
-                    "🥪 Перерва: 12:30 – 13:00\n\n"
-                    "Неділя\n"
-                    "❌ Вихідний\n"
-                    "⚠️ Тільки запис на майбутні дні\n"
-    )
-    bot.send_message(user_id, schedule)
+    config = JSON("data.json")
+    working_hours: list = config.read()["working_hours"]
+    day_names = ["Понеділок", "Вівторок", "Середа", "Четвер", "П’ятниця", "Субота", "Неділя"]
+    text = "🕒 Графік роботи СТО 🚗\n\n"
+
+    for i, day_info in enumerate(working_hours):
+        text += f"{day_names[i]}\n"
+        if day_info is None:
+            text += "❌ Вихідний\n\n"
+            continue
+        text += f"⏰ {day_info['start']} – {day_info['end']}\n"
+        if "break" in day_info and day_info["break"]:
+            text += f"🥪 Перерва: {day_info['break'][0]} – {day_info['break'][1]}\n"
+        text += "\n"
+
+    bot.send_message(user_id, text)
 
 
 def display_address(user_id: int) -> None:
