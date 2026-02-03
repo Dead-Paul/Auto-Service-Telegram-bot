@@ -220,12 +220,12 @@ def display_schedule(user_id: int) -> None:
 
 
 def display_address(user_id: int) -> None:
-    # заглушка, пока не файла JSON
-    schedule: str = ("Контакти та адреса\n\n"
-                     "📍Адреса: м. Харків, вул. Технічна, 12\n"
-                     "📞Телефон для довідок: +380 88 005 55 3535\n"
-                     "📧Електронна пошта: info@sto.kh.ua"
-    )
-    bot.send_message(user_id, schedule)
+    data = data_json.read()
+    contact = data.get("contact", {})
+    bot.send_message(user_id, (f"Контакти та адреса\n\n📍Адреса: {contact.get("address", "Адреса не вказана")}"
+                     f"\n📞Телефон для довідок: {contact.get("phone", "Телефон не вказаний")}\n📧Електронна пошта: {contact.get("email", "Email не вказаний")}"))
+
+
+
 
 bot.infinity_polling()
